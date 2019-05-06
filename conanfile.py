@@ -7,7 +7,7 @@ import os
 
 class GLibConan(ConanFile):
     name = "glib"
-    version = "2.56.1"
+    version = "2.40.0"
     description = "GLib provides the core application building blocks for libraries and applications written in C"
     url = "https://github.com/bincrafters/conan-glib"
     homepage = "https://github.com/GNOME/glib"
@@ -19,12 +19,23 @@ class GLibConan(ConanFile):
     default_options = "shared=False", "fPIC=True", "with_pcre=False"
     requires = "zlib/1.2.11@conan/stable"
     source_subfolder = "source_subfolder"
+    exports_sources = "patches/*"
     autotools = None
 
     def configure(self):
         if self.settings.os != 'Linux':
             raise Exception("GNOME glib is only supported on Linux for now.")
         del self.settings.compiler.libcxx
+
+    def system_requirements(self):
+        pkgs_name = None
+        if tools.os_info.linux_distro == "ubuntu":
+            pkgs_name = ["libffi-dev"]
+
+        if pkgs_name:
+            installer = tools.SystemPackageTool()
+            for pkg_name in pkgs_name:
+                installer.install(pkg_name)
 
     def requirements(self):
         if self.options.with_pcre:
@@ -33,6 +44,11 @@ class GLibConan(ConanFile):
     def source(self):
         tools.get("{0}/archive/{1}.tar.gz".format(self.homepage, self.version))
         extracted_dir = self.name + "-" + self.version
+
+        # work around error: m4_copy: won't overwrite defined macro: glib_DEFUN
+        tools.replace_in_file(extracted_dir + "/m4macros/glib-gettext.m4", "m4_copy", "m4_copy_force")
+        tools.patch(base_path=extracted_dir, patch_file="patches/gdate_suppress_string_format_literal_warning.patch")
+
         os.rename(extracted_dir, self.source_subfolder)
         self._create_extra_files()
 
@@ -45,7 +61,7 @@ class GLibConan(ConanFile):
 
     def _configure_autotools(self):
         if not self.autotools:
-            configure_args = ['--disable-man', '--disable-doc', '--disable-libmount']
+            configure_args = ['--disable-man']
             if not self.options.with_pcre:
                 configure_args.append('--without-pcre')
             if not self.options.shared:
