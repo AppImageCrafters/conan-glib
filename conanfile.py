@@ -7,7 +7,7 @@ import os
 
 class GLibConan(ConanFile):
     name = "glib"
-    version = "2.57.1"
+    version = "2.19.10"
     description = "GLib provides the core application building blocks for libraries and applications written in C"
     url = "https://github.com/bincrafters/conan-glib"
     homepage = "https://github.com/GNOME/glib"
@@ -25,13 +25,30 @@ class GLibConan(ConanFile):
             raise Exception("GNOME glib is only supported on Linux for now.")
         del self.settings.compiler.libcxx
 
+    def system_requirements(self):
+        pack_name = None
+        if tools.os_info.linux_distro == "ubuntu":
+            pack_name = "gtk-doc-tools"
+
+        if pack_name:
+            installer = tools.SystemPackageTool()
+            installer.install(pack_name)
+
     def requirements(self):
         if self.options.with_pcre:
             self.requires.add("pcre/8.41@bincraftres/stable")
 
     def source(self):
-        tools.get("{0}/archive/{1}.tar.gz".format(self.homepage, self.version))
-        extracted_dir = self.name + "-" + self.version
+        tools.get("https://github.com/GNOME/glib/archive/GLIB_2_19_10.tar.gz")
+        extracted_dir = self.name + "-GLIB_2_19_10";
+
+        # work around error: m4_copy: won't overwrite defined macro: glib_DEFUN
+        tools.replace_in_file(extracted_dir + "/m4macros/glib-gettext.m4", "m4_copy", "m4_copy_force")
+
+        # https://bugzilla.gnome.org/show_bug.cgi?id=591840
+        tools.replace_in_file(extracted_dir + "/acglib.m4", "m4_ifvaln([$3],[$3])dnl])dnl", "m4_ifvaln([$3],[$3])dnl])")
+        tools.replace_in_file(extracted_dir + "/acglib.m4", "([$1], [AC_LANG_CONFTEST([$1])])dnl", "([$1], [AC_LANG_CONFTEST([$1])])")
+
         os.rename(extracted_dir, self.source_subfolder)
         self._create_extra_files()
 
@@ -44,7 +61,7 @@ class GLibConan(ConanFile):
 
     def _configure_autotools(self):
         if not self.autotools:
-            configure_args = ['--disable-man', '--disable-doc', '--disable-libmount']
+            configure_args = ['--enable-gtk-doc-html=no', '--disable-libmount']
             if not self.options.with_pcre:
                 configure_args.append('--without-pcre')
             if not self.options.shared:
